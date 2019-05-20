@@ -825,7 +825,7 @@ def generate_tsv_file(columns,list_information,file_name):
     drugbank_information = pandas.DataFrame.from_dict(list_information)[columns]
     drugbank_information.head()
     
-    path = os.path.join('data', file_name)
+    path = os.path.join('drugbank', file_name)
     drugbank_information.to_csv(path, sep='\t', index=False, encoding='utf-8')
 
 print (datetime.datetime.utcnow())
