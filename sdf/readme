@@ -1,2 +1,2 @@
 The program sdf_file_to_csv.py generate a csv file from a given adf file. However, for the structure file there where some errors where the row must be add manual.
-The manual written lines can be combined with script_to_combine_two_files.sh.
+The manual written lines can be combined with script_to_combine_two_files.sh. The .._add.csv are the manual added one, however because this is from the DrugBank Version January 2019 it can be that there are othere errors.
