@@ -5,3 +5,15 @@ This integrated DrugBank (https://www.drugbank.ca/releases/latest) into Neo4j, b
 with some changes, so that also more properties and relationships are extracted. The results are multiple tsv files and not only one.
 
 After extract the information of the XML file the information must be combined with the information from the other DrugBank files. Also, the targets are validated with the UniProt identifier (https://github.com/ckoenigs/UniProt_to_Neo4j). The program need as information where the other DrugBank files are. Also, the generated csv files from the other program are in a dictionary drugbank.
+
+This should have the form:
+
+![er_diagram](https://github.com/ckoenigs/DrugBank_to_Neo4j/blob/master/drugbank_er_final.png)
+
+The Compound has so many properties:
+
+![er_diagram](https://github.com/ckoenigs/DrugBank_to_Neo4j/blob/master/drugbank_compound.png)
+
+The Relationships have also some properties:
+
+![er_diagram](https://github.com/ckoenigs/DrugBank_to_Neo4j/blob/master/drugbank_er_rela_2.png)
