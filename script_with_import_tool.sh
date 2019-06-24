@@ -1,4 +1,9 @@
 #!/bin/bash
+now=$(date +"%F %T")
+echo "Current time: $now"
+echo xml extraction
+
+python transform_drugbank_to_tsv.py > output_transformation.txt
 
 now=$(date +"%F %T")
 echo "Current time: $now"
