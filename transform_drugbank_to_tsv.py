@@ -745,7 +745,7 @@ for i, drug in enumerate(root):
     rows.append(row)
 #    if db_ID=='DB01470':
 ##        print(drug.findtext(ns + "name"))
-#        file_test=open('data/tets_name.csv','w',encoding='utf8')
+#        file_test=open('drugbank/tets_name.csv','w',encoding='utf8')
 #        file_test.write(drug.findtext(ns + "name"))
 #        file_test.close()
 #        break
@@ -754,7 +754,7 @@ print('number of entries in drugbank:'+str(counter))
 print (datetime.datetime.utcnow())   
 #sys.exit()
 alias_dict = {row['drugbank_id']: row['aliases'] for row in rows}
-with open('./data/aliases.json', 'w') as fp:
+with open('./drugbank/aliases.json', 'w') as fp:
     json.dump(alias_dict, fp, indent=2, sort_keys=True)
     
 def collapse_list_values(row):
@@ -883,11 +883,11 @@ drugbank_slim_df.head()
 
 
 # write drugbank tsv
-path = os.path.join('data', 'drugbank_drug.tsv')
+path = os.path.join('drugbank', 'drugbank_drug.tsv')
 drugbank_df.to_csv(path, sep='\t', index=False, encoding='utf-8-sig')
 
 # write slim drugbank tsv
-path = os.path.join('data', 'drugbank-slim2_drug.tsv')
+path = os.path.join('drugbank', 'drugbank-slim2_drug.tsv')
 drugbank_slim_df.to_csv(path, sep='\t', index=False, encoding='utf-8')
 
 generate_tsv_file(columns_drug_interaction,drug_interactions,'drugbank_interaction.tsv')
@@ -920,5 +920,3 @@ print (datetime.datetime.utcnow())
 # write drugbank tsv
 #path = os.path.join('data', 'drugbank_interaction.tsv')
 #drugbank_df_drug_interaction.to_csv(path, sep='\t', index=False)
-
-
