@@ -1,30 +1,16 @@
+# -*- coding: utf-8 -*-
 # this file go through all csv,fasta and sdf filed from the DrugBank download site and test  if the information are already
 # in the xml file or not. Also if some information are not included then they are combinded withe the other files.
 
 import sys, io
 import os, csv
-from docutils.utils.punctuation_chars import delimiters
 
-from Bio import SeqIO
 from itertools import groupby
-import datetime, time
-from py2neo import Graph, authenticate
-import subprocess
+import datetime
 
 # encoding=utf8
-reload(sys)
-sys.setdefaultencoding('utf8')
-
-'''
-create connection to neo4j 
-'''
-
-
-def create_connection_with_neo4j_mysql():
-    # create connection with neo4j
-    authenticate("localhost:7474", "neo4j", "test")
-    global g
-    g = Graph("http://localhost:7474/db/data/")
+# reload(sys)
+# sys.setdefaultencoding('utf8')
 
 
 # dictionary with every uniprot id and and every property
@@ -33,31 +19,31 @@ dict_uniprot = {}
 # dictionary with human name from uniprot to the uniprot id
 dict_uniprot_name_to_access = {}
 
-#dictionary withac-number to alternative ac-numbers
-dict_ac_number_to_alternative={}
+# dictionary withac-number to alternative ac-numbers
+dict_ac_number_to_alternative = {}
 
-#dictionary count multiple
-dict_ac_number_to_count={}
+# dictionary count multiple
+dict_ac_number_to_count = {}
 '''
 load uniprot information into dictionary
 '''
 
 
 def load_uniprot_info_into_dictionary():
-    file_uniprot = open('../uniProt/uniprot.tsv', 'r')
+    file_uniprot = open('../uniProt/uniprot.tsv', 'r', encoding='utf-8')
     csv_reader = csv.DictReader(file_uniprot, delimiter='\t')
-    counter_row=0
-    counter_ac_number_multiple=0
+    counter_row = 0
+    counter_ac_number_multiple = 0
     for row in csv_reader:
-        counter_row+=1
+        counter_row += 1
         ac_numbers = row['second_ac_numbers']
-        ac_number_list=ac_numbers.split('|')
+        ac_number_list = ac_numbers.split('|')
         ac_number_list.append(row['identifier'])
         for ac_number in ac_number_list:
-            copy_ac_list=ac_number_list[:]
+            copy_ac_list = ac_number_list[:]
             if ac_number in dict_ac_number_to_alternative:
                 copy_ac_list.remove(ac_number)
-                dict_ac_number_to_alternative[ac_number]|=set(copy_ac_list)
+                dict_ac_number_to_alternative[ac_number] |= set(copy_ac_list)
             else:
                 copy_ac_list.remove(ac_number)
                 dict_ac_number_to_alternative[ac_number] = set(copy_ac_list)
@@ -66,24 +52,18 @@ def load_uniprot_info_into_dictionary():
                 dict_uniprot[ac_number] = [row]
 
             else:
-                counter_ac_number_multiple+=1
+                counter_ac_number_multiple += 1
                 if not ac_number in dict_ac_number_to_count:
-                    dict_ac_number_to_count[ac_number]=2
+                    dict_ac_number_to_count[ac_number] = 2
                 else:
-                    dict_ac_number_to_count[ac_number]+=1
+                    dict_ac_number_to_count[ac_number] += 1
                 dict_uniprot[ac_number].append(row)
         ncbi_tax_ids = row['ncbi_taxid']
-        for ncbi_id in ncbi_tax_ids.split('|'):
-            if ncbi_id == '9606':
-                name = row['name']
-                if not name in dict_uniprot_name_to_access:
-                    dict_uniprot_name_to_access['name'] = ac_numbers
-                else:
-                    sys.exit('double human name:' + name)
 
-    print('number of multiple ac-numbers:'+str(counter_ac_number_multiple))
+    print('number of multiple ac-numbers:' + str(counter_ac_number_multiple))
     # print(dict_ac_number_to_count)
     # for
+
 
 # increase the csv max size
 maxInt = sys.maxsize
@@ -103,25 +83,26 @@ while decrement:
         maxInt = int(maxInt / 10)
         decrement = True
 
+"""
+given a fasta file. yield tuples of header, sequence
+"""
+
 
 def fasta_iter(fasta_name):
-    """
-    given a fasta file. yield tuples of header, sequence
-    """
     fh = open(fasta_name)
     # ditch the boolean (x[0]) and just keep the header or sequence since
     # we know they alternate.
     faiter = (x[1] for x in groupby(fh, lambda line: line[0] == ">"))
     for header in faiter:
         # drop the ">"
-        header = header.next()[1:].strip()
+        header = header.__next__()[1:].strip()
         # join all sequence lines to one.
-        seq = "".join(s.strip() for s in faiter.next())
+        seq = "".join(s.strip() for s in faiter.__next__())
         yield header, seq
 
 
 # only when all arguments are their continue
-if len(sys.argv) != 7:
+if len(sys.argv) != 8:
     print(
         '1 to the directory with all drugbank information \n 2 to drug sequence \n 3 to external links \n 4 to protein identifier \n 4 to structure \n 5 to target sequence \n')
     print(len(sys.argv))
@@ -134,10 +115,16 @@ path_to_external_links = whole_path + sys.argv[3]
 path_to_protein_identifier = whole_path + sys.argv[4]
 path_to_structure = whole_path + sys.argv[5]
 path_to_target_sequence = whole_path + sys.argv[6]
+path_of_directory = sys.argv[7]
 path_prepared_drugbank_files = 'drugbank/'
 
-cypher_file = open('output/cypher_file.cypher', 'w')
-cypher_rela_file = open('output/cypher_rela_file.cypher', 'w')
+cypher_file = open('output/cypher_file.cypher', 'w', encoding='utf-8')
+cypher_rela_file = open('output/cypher_rela_file.cypher', 'w', encoding='utf-8')
+
+'''
+add synonyms from xml to the other synonyms for product an salt
+else check for properties if they are equal
+'''
 
 
 def check_for_properties(property_value, xml_property_list, property_name, synonyms):
@@ -159,7 +146,15 @@ def check_for_properties(property_value, xml_property_list, property_name, synon
                     print(property_name)
                     print(property)
                     print(xml_property_list)
-                    sys.exit('structure problem')
+                    print(list_property)
+                    found_the_structure = False
+
+                    for part_property in xml_property_list:
+                        if property == part_property[0:len(property)]:
+                            found_the_structure = True
+                    if not found_the_structure:
+                        print('structure not found')
+                        # sys.exit('structure problem')
 
 
 # dictionary with drugbank id as key and value a list of salts ids
@@ -169,6 +164,10 @@ dict_salts = {}
 
 # string for integrate the drubank database to neo4j with the neo4j-admin import tool
 import_string = '../../../../neo4j-community-3.2.9/bin/neo4j-admin import --mode=csv'
+
+'''
+load salt information and salt-drug relationship
+'''
 
 
 def load_salts_information_in():
@@ -189,13 +188,35 @@ def load_salts_information_in():
 dict_drugbank_drug_ids = {}
 
 # dictionary all experimental properties
-dict_experimental_properties={}
+dict_experimental_properties = {}
 
 # dictionary all calculated properties
-dict_calculated_properties={}
+dict_calculated_properties = {}
 
 '''
+check if properties are equal
+'''
 
+
+def check_on_property(property, dict_external, value, drugbank_id, error_massage):
+    if property in dict_external:
+        if value != '':
+            for value_part in value.split('; '):
+                if not value_part in dict_external[property]:
+                    print(dict_external)
+                    print(drugbank_id)
+                    print(property)
+                    print(value)
+                    print(value_part)
+                    print(dict_external[property])
+                    sys.exit(error_massage)
+        return True
+    return False
+
+
+'''
+go through all files which contains drug information and combinded them
+before combinding 
 '''
 
 
@@ -205,7 +226,7 @@ def drugs_combination_and_check(neo4j_label):
     dict_drug_sequence = {}
 
     # this gather all information from the sequence folder
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('gather all information form drug sequences files')
     for file in os.listdir(path_to_drug_sequences):
         if file.endswith(".fasta"):
@@ -220,10 +241,11 @@ def drugs_combination_and_check(neo4j_label):
                 else:
                     dict_drug_sequence[db_id] = [seq]
 
+    # list of external references formthe drug links file
     dict_drug_external_ids = {}
 
     # this take all information from drug links.csv
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('take all information from drug links.csv')
     with open(path_to_external_links + 'drug links.csv') as csvfile:
         spamreader = csv.reader(csvfile, delimiter=',')
@@ -244,7 +266,7 @@ def drugs_combination_and_check(neo4j_label):
 
     dict_drug_structure_links = {}
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('take all information from structure links')
     # this takes all information from structures -> structure links.csv
     with open(path_to_structure + 'structure links.csv') as csvfile:
@@ -266,11 +288,11 @@ def drugs_combination_and_check(neo4j_label):
 
     dict_drug_structure = {}
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('take all information from structure')
     # this takes all information from structures -> structure.sdf which was converted into a csv
     # properties: ALOGPS_LOGP	ALOGPS_LOGS	ALOGPS_SOLUBILITY	DATABASE_ID	DATABASE_NAME	DRUGBANK_ID	DRUG_GROUPS	EXACT_MASS	FORMULA	GENERIC_NAME	ID	INCHI_IDENTIFIER	INCHI_KEY	INTERNATIONAL_BRANDS	JCHEM_ACCEPTOR_COUNT	JCHEM_ATOM_COUNT	JCHEM_AVERAGE_POLARIZABILITY	JCHEM_BIOAVAILABILITY	JCHEM_DONOR_COUNT	JCHEM_FORMAL_CHARGE	JCHEM_GHOSE_FILTER	JCHEM_IUPAC	JCHEM_LOGP	JCHEM_MDDR_LIKE_RULE	JCHEM_NUMBER_OF_RINGS	JCHEM_PHYSIOLOGICAL_CHARGE	JCHEM_PKA	JCHEM_PKA_STRONGEST_ACIDIC	JCHEM_PKA_STRONGEST_BASIC	JCHEM_POLAR_SURFACE_AREA	JCHEM_REFRACTIVITY	JCHEM_ROTATABLE_BOND_COUNT	JCHEM_RULE_OF_FIVE	JCHEM_TRADITIONAL_IUPAC	JCHEM_VEBER_RULE	MOLECULAR_WEIGHT	Molecule	PRODUCTS	SALTS	SECONDARY_ACCESSION_NUMBERS	SMILES	SYNONYMS
-    with open('sdf/structure_combined.csv') as csvfile:
+    with open('sdf/structure.csv') as csvfile:
         spamreader = csv.DictReader(csvfile, delimiter=',')
         properties = spamreader.fieldnames
         i = 0
@@ -329,10 +351,10 @@ def drugs_combination_and_check(neo4j_label):
         'JCHEM_LOGP': 'logP'
     }
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('missing structure sdf')
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('check and combine the different information source with the xml source in an new file')
 
     new_properties_for_tsv = ['JCHEM_VEBER_RULE', 'JCHEM_PKA', 'JCHEM_ATOM_COUNT', 'JCHEM_FORMAL_CHARGE']
@@ -371,7 +393,7 @@ def drugs_combination_and_check(neo4j_label):
     load_salts_information_in()
 
     tool_path = 'output/neo4j_import/drugbank_compounds.tsv'
-    output_import_file = open(tool_path, 'w')
+    output_import_file = open(tool_path, 'w', encoding='utf-8')
 
     global import_string
     import_string += ' --nodes ' + tool_path
@@ -380,21 +402,23 @@ def drugs_combination_and_check(neo4j_label):
     # test if the sequence and the external identifier are the same and when something is not in the xml it is add
     # therefore a new file is generated
     # currently only the uniprot title are add to synonyms
-    with open(path_prepared_drugbank_files + '/drugbank_drug.tsv') as csvfile:
+    with open(path_prepared_drugbank_files + '/drugbank_drug.tsv', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile, delimiter='\t')
         header = reader.fieldnames
         ########
         header.append('ChEMBL')
         #######
-        output_file_drug = open('output/drugbank_drug.tsv', 'w')
+        output_file_drug = open('output/drugbank_drug.tsv', 'w', encoding='utf-8')
         writer_drug = csv.writer(output_file_drug, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         writer_drug.writerow(header)
-        query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:/home/cassandra/Dokumente/Project/master_database_change/import_into_Neo4j/drugbank/output/drugbank_drug.tsv" As line FIELDTERMINATOR '\\t' Create (b:''' + neo4j_label + '''{ '''
+        query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:''' + path_of_directory + '''master_database_change/import_into_Neo4j/drugbank/output/drugbank_drug.tsv" As line FIELDTERMINATOR '\\t' Create (b:''' + neo4j_label + '''{ '''
         new_header = []
 
         # list properties which are lists
-        list_properties = ['alternative_drugbank_ids', 'groups', 'general_references_links_title_url',
-                           'general_references_textbooks_isbn_citation', 'general_references_articles_pubmed_citation',
+        list_properties = ['alternative_drugbank_ids', 'groups', 'general_references_links_reference_id_title_url',
+                           'general_references_attachment_reference_id_title_url',
+                           'general_references_textbooks_reference_id_isbn_citation',
+                           'general_references_articles_reference_id_pubmed_citation',
                            'synonyms', 'products', 'international_brands_name_company', 'mixtures_name_ingredients',
                            'packagers_name_url', 'manufacturers', 'prices_description_cost_unit',
                            'categories_category_mesh_id', 'affected_organisms', 'dosages_form_route_strength',
@@ -402,10 +426,11 @@ def drugs_combination_and_check(neo4j_label):
                            'patents_number_country_approved_expires_pediatric_extension',
                            'food_interaction', 'sequences', 'calculated_properties_kind_value_source',
                            'experimental_properties_kind_value_source', 'external_identifiers',
-                           'external_links_resource_url','classification_alternative_parent','classification_substituent']
+                           'external_links_resource_url', 'classification_alternative_parent',
+                           'classification_substituent','atc_codes']
 
         for head in header:
-            if head == '\xef\xbb\xbfdrugbank_id':
+            if head == '\ufeffdrugbank_id':
                 query += '''identifier:line.drugbank_id, '''
                 new_header.append('identifier:ID')
             elif head in list_properties:
@@ -426,9 +451,12 @@ def drugs_combination_and_check(neo4j_label):
 
         counter_uniprot_title = 0
 
-        counter_chembl=0
+        counter_chembl = 0
         for row in reader:
-            drugbank_id = row['\xef\xbb\xbfdrugbank_id']
+            # drugbank_id = row['\xef\xbb\xbfdrugbank_id']
+            drugbank_id = row['\ufeffdrugbank_id']
+            if drugbank_id == 'DB01054':
+                print('huhu')
             dict_drugbank_drug_ids[drugbank_id] = 1
             name = row['name']
             cas_number = row['cas_number']
@@ -436,17 +464,18 @@ def drugs_combination_and_check(neo4j_label):
             external_identifier = row['external_identifiers'].split('||') if row['external_identifiers'] != '' else []
             dict_external = {}
             synonyms = set(row['synonyms'].split('||')) if not row['synonyms'] == '' else set([])
-            chembl=[]
+            chembl = []
+            # to make chembl as an own property
             ################################################################################
             for line in external_identifier:
-                if line.split(':', 1)[0]=='ChEMBL':
+                if line.split(':', 1)[0] == 'ChEMBL':
                     chembl.append(line.split(':', 1)[1])
 
                 if line.split(':', 1)[0] in dict_external:
                     dict_external[line.split(':', 1)[0]].append(line.split(':', 1)[1])
                 else:
                     dict_external[line.split(':', 1)[0]] = [line.split(':', 1)[1]]
-            chembl='||'.join(chembl)
+            chembl = '||'.join(chembl)
             #######################################################
             external_identifier_links = row['external_links_resource_url'].split('||') if row[
                                                                                               'external_links_resource_url'] != '' else []
@@ -489,17 +518,7 @@ def drugs_combination_and_check(neo4j_label):
                 elif property in dict_changed_external_identifier_source_name:
                     property = dict_changed_external_identifier_source_name[property]
 
-                if property in dict_external:
-                    for value_part in value.split('; '):
-                        if not value_part in dict_external[property]:
-                            print(dict_external)
-                            print(drugbank_id)
-                            print(property)
-                            print(value)
-                            print(value_part)
-                            print(dict_external[property])
-                            sys.exit('external identifier')
-                elif value == '':
+                if check_on_property(property, dict_external, value, drugbank_id, 'external identifier') or value == '':
                     continue
                 else:
                     print(dict_external)
@@ -521,7 +540,7 @@ def drugs_combination_and_check(neo4j_label):
                                                                                                                   'experimental_properties_kind_value_source'] != '' else []
                 for property_value_source in experimental_property_value:
                     split_prop_value_source = property_value_source.split('::')
-                    dict_experimental_properties[split_prop_value_source[0]]=1
+                    dict_experimental_properties[split_prop_value_source[0]] = 1
                     if split_prop_value_source[0] in dict_experimental_property_value:
                         print('ohje')
                         sys.exit('experimental property')
@@ -567,17 +586,8 @@ def drugs_combination_and_check(neo4j_label):
 
                     elif property in dict_changed_external_identifier_source_name:
                         property = dict_changed_external_identifier_source_name[property]
-                        if property in dict_external:
-                            for value_part in value.split('; '):
-                                if not value_part in dict_external[property]:
-                                    print(dict_external)
-                                    print(drugbank_id)
-                                    print(property)
-                                    print(value)
-                                    print(value_part)
-                                    print(dict_external[property])
-                                    sys.exit('structure links external identifier')
-                        elif value == '':
+                        if check_on_property(property, dict_external, value, drugbank_id,
+                                             'structure links external identifier') or value == '':
                             continue
                         else:
                             print(dict_external)
@@ -757,15 +767,16 @@ def drugs_combination_and_check(neo4j_label):
                                 # if property_name in ['SMILES','Polar Surface Area (PSA)','logS','pKa (strongest basic)','pKa (strongest acidic)','Polarizability', 'Refractivity','logP']:
                                 else:
                                     # in the structure file it has the Molecular Formula:C14H20ClN3S but this is not right (C14H19N3S) and can be ignored
-                                    if not drugbank_id=='DB04819' and not property_name=='Molecular Formula':
+                                    if not drugbank_id == 'DB04819' and not property_name == 'Molecular Formula':
                                         # both IUPAC names are nearly the same but different isomere so both should be ok
-                                        if drugbank_id=='DB07702' and property_name=='IUPAC Name':
+                                        if drugbank_id == 'DB07702' and property_name == 'IUPAC Name':
                                             dict_calculated_property_value[property_name].append(property_value)
                                             continue
                                         print(drugbank_id)
                                         print(property_name)
                                         print(dict_calculated_property_value[property_name])
-                                        sys.exit(property_name + ':' + property_value)
+                                        print(property_name + ':' + property_value)
+                                        # sys.exit(property_name + ':' + property_value)
 
                         # if the property is not in the xml it is add to the new file
                         if not found_property:
@@ -779,7 +790,7 @@ def drugs_combination_and_check(neo4j_label):
                             if drugbank_id in ['DB14193', 'DB14194']:
                                 continue
                             elif property_name in ['InChIKey', 'InChI']:
-                                dict_inchi_inchikey[property_name] = property_value
+                                dict_inchi_inchikey[property_name.lower()] = property_value
                             print(drugbank_id)
                             print(property_name)
                             print(property_value)
@@ -809,10 +820,10 @@ def drugs_combination_and_check(neo4j_label):
             # write the infomation into the output file with the updated information
             output_list = []
             new_entry = []
-            chembl_included=False
+            chembl_included = False
             for head in header:
                 # only synonyms and calculated properties are updated
-                if not head in ['synonyms', 'calculated_properties_kind_value_source', 'inchikey', 'inchi','ChEMBL']:
+                if not head in ['synonyms', 'calculated_properties_kind_value_source', 'inchikey', 'inchi', 'ChEMBL']:
                     if head == 'classification_description':
                         row[head] = row[head].replace('\"', '\\"')
 
@@ -855,11 +866,11 @@ def drugs_combination_and_check(neo4j_label):
                         output_list.append(row[head])
                         new_entry.append(row[head])
                 ###############################################################################################################
-                elif head=='ChEMBL':
+                elif head == 'ChEMBL':
                     output_list.append(chembl)
                     new_entry.append(chembl)
-                    if chembl!='':
-                        chembl_included=True
+                    if chembl != '':
+                        chembl_included = True
                 else:
                     calculated_updated_values = []
                     if row['calculated_properties_kind_value_source'] != '':
@@ -915,7 +926,7 @@ def drugs_combination_and_check(neo4j_label):
             #         sys.exit('happy')
             writer.writerow(new_entry)
             writer_drug.writerow(output_list)
-                # counter_chembl += 1
+            # counter_chembl += 1
             ############################################################
             # if drugbank_id == 'DB00315':
             #     sys.exit()
@@ -929,7 +940,7 @@ def drugs_combination_and_check(neo4j_label):
     print("properties ;)")
     print(dict_experimental_properties)
     print(dict_calculated_properties)
-    print('sfsdfsdgsdgsfdgsfdhsfdgh:'+str(counter_chembl))
+    print('sfsdfsdgsdgsfdgsfdhsfdgh:' + str(counter_chembl))
 
 
 ###################################################################################################################
@@ -996,6 +1007,13 @@ def sequences_for_all_targets(directory, dict_drug_targets, dict_targets):
     work_with_target_sequence_fasta(directory, 'protein.fasta', 'amino_acid_sequence', dict_targets, dict_drug_targets)
 
 
+'''
+gathering the target information from the different file pharmacologically active or in all
+also  fill the drug-target relationship
+
+'''
+
+
 def identifier_for_all_targets(directory, dict_drug_targets, dict_targets, dict_drug_target_pharmacologically_actions):
     with open(directory + 'pharmacologically_active.csv') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=',')
@@ -1005,19 +1023,19 @@ def identifier_for_all_targets(directory, dict_drug_targets, dict_targets, dict_
             dict_target_info = {}
             uniprot_id = row['UniProt ID']
             drug_ids = row['Drug IDs'].split('; ') if row['Drug IDs'] != '' else []
+            # gather the information from this file with exception of id, uniprot id, drug id and species
             for head in header:
                 if head not in ['ID', 'UniProt ID', 'Drug IDs', 'Species']:
                     dict_target_info[head] = row[head].split('; ') if row[head] != '' else []
             if uniprot_id not in dict_targets:
                 dict_targets[uniprot_id] = dict_target_info
             else:
-                for head in header:
+                for head, values in dict_target_info.items():
                     if head not in ['ID', 'UniProt ID', 'Drug IDs', 'Species']:
-                        values = row[head].split('; ') if row[head] != '' else []
                         for value in values:
-                            if value not in dict_target_info[head]:
-                                sys.exit('multiple uniprot in on file and one value is not in there ' + uniprot_id)
-
+                            if head in dict_targets[uniprot_id] and value not in dict_targets[uniprot_id][head]:
+                                sys.exit('New information in pharmacologically_activity in  ' + uniprot_id)
+            # fill drug-target  pharmacolocigal active relationship dictionary
             for drug_id in drug_ids:
                 dict_drug_target_pharmacologically_actions[(drug_id, uniprot_id)] = row['Species']
 
@@ -1036,6 +1054,7 @@ def identifier_for_all_targets(directory, dict_drug_targets, dict_targets, dict_
             if uniprot_id not in dict_targets:
                 dict_targets[uniprot_id] = dict_target_info
 
+            # add in normal relationship dictionary
             for drug_id in drug_ids:
                 if (drug_id, uniprot_id) not in dict_drug_target_pharmacologically_actions:
                     dict_drug_targets[(drug_id, uniprot_id)] = 1
@@ -1062,32 +1081,16 @@ def check_and_maybe_generate_a_new_target_file(file, dict_targets_info_external,
         print(file)
         reader = csv.DictReader(csvfile, delimiter='\t')
         header = reader.fieldnames
-        output_file_csv = open(output_file, 'w')
-        writer_output = csv.writer(output_file_csv, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        # output_file_csv = open(output_file, 'w')
+        # writer_output = csv.writer(output_file_csv, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
         i = 0
         for head in header:
             header_new.append(head)
         header_new.append('alternative_uniprot_id')
         header.append('alternative_uniprot_id')
-        writer_output.writerow(header_new)
+        # writer_output.writerow(header_new)
 
-        # query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:/home/cassandra/Dokumente/Project/master_database_change/import_into_Neo4j/drugbank/''' + output_file + '''" As line FIELDTERMINATOR '\\t' Create (b:''' + neo4j_label +' :'+neo4j_general_label+ '''{ '''
-        # for head in header_new:
-        #     # if head == 'drugbank_id':
-        #     #     query += '''identifier:line.''' + head + ', '
-        #     if head == 'id':
-        #         query += '''identifier:line.''' + head + ', '
-        #     elif head in ['go_classifiers', 'pfams', 'gene_sequence', 'amino_acid_sequence', 'synonyms', 'xrefs']:
-        #         query += head + ':split(line.' + head + ''', '||'), '''
-        #     else:
-        #         query += head + ':line.' + head + ', '
-        #
-        # query = query + '''license:"''' + drugbank_license + '''"});\n'''
-        # cypher_file.write(query)
-        # cypher_file.write(':begin\n')
-        # cypher_file.write('Create Constraint On (node:' + neo4j_label + ') Assert node.identifier Is Unique;\n')
-        # cypher_file.write(':commit\n')
         list_of_all_used_uniprot_ids = set([])
         # print(header)
         counter_total_number_of_nodes = 0
@@ -1217,11 +1220,12 @@ def check_and_maybe_generate_a_new_target_file(file, dict_targets_info_external,
             list_properties = []
             identifier = uniprot_id
             if identifier in dict_ac_number_to_count:
-                print('#s#s#s#s#s#s#s#s#s#s#s#s#s#s#s#s#s#s#s#s#s#ss#s##s#ss#s#s#s#s#s#s#s#s#s#s#s#s#s##ss#s#s#s#s#s#s#s#s#s#s#s##s')
+                print(
+                    '#s#s#s#s#s#s#s#s#s#s#s#s#s#s#s#s#s#s#s#s#s#ss#s##s#ss#s#s#s#s#s#s#s#s#s#s#s#s#s##ss#s#s#s#s#s#s#s#s#s#s#s##s')
                 print(dict_ac_number_to_count[identifier])
                 print(drugbank_id)
             for head in header:
-                if head not in ['synonyms', 'xrefs', 'gene_sequence','alternative_uniprot_id']:
+                if head not in ['synonyms', 'xrefs', 'gene_sequence', 'alternative_uniprot_id']:
                     if head == 'id' and row[head] == '':
                         list_properties.append(row['drugbank_id'])
                         identifier = row['drugbank_id']
@@ -1236,9 +1240,9 @@ def check_and_maybe_generate_a_new_target_file(file, dict_targets_info_external,
                         list_properties.append(combined_sequences)
                     else:
                         list_properties.append(row[head])
-                elif head=='alternative_uniprot_id':
+                elif head == 'alternative_uniprot_id':
                     if identifier in dict_ac_number_to_alternative:
-                        list_alternative_uniprot_ids='||'.join(list(dict_ac_number_to_alternative[identifier]))
+                        list_alternative_uniprot_ids = '||'.join(list(dict_ac_number_to_alternative[identifier]))
                         list_properties.append(list_alternative_uniprot_ids)
                     else:
                         list_properties.append('')
@@ -1246,24 +1250,37 @@ def check_and_maybe_generate_a_new_target_file(file, dict_targets_info_external,
                     string_xref = '||'.join([xref + '::' + ';'.join(values) for xref, values in xrefs.items()])
                     list_properties.append(string_xref)
 
+            # check if entries are already include
             if not identifier in dict_target_properties:
                 dict_target_properties[identifier] = [list_properties, [neo4j_label]]
+
             else:
                 before_properties, label_list = dict_target_properties[identifier]
                 i = 0
                 counter_same_id_different_label += 1
                 for property in list_properties:
                     if property != before_properties[i]:
-                        print(identifier)
-                        print(before_properties)
-                        print(list_properties)
-                        print(label_list)
-                        print(neo4j_label)
+
                         # sys.exit('ohje')
                         if property[0:2] == 'BE':
-                            before_properties[i] += '||' + property
+                            set_of_infos=set(before_properties[i].split('||'))
+                            set_of_infos.add(property)
+                            set_of_infos=list(filter(bool, set_of_infos))
+                            before_properties[i] = '||'.join(set_of_infos)
                         else:
-                            sys.exit('another property is not the same')
+                            print(identifier)
+                            print(before_properties)
+                            print(list_properties)
+                            print(property)
+                            print(before_properties[i])
+                            print(label_list)
+                            print(neo4j_label)
+                            print(identifier)
+                            set_of_infos = set(before_properties[i].split('||'))
+                            set_of_infos.add(property)
+                            set_of_infos=list(filter(bool, set_of_infos))
+                            before_properties[i] = '||'.join(set_of_infos)
+                            print('another property is not the same')
                         counter_same_id_different_label_not_same_properties += 1
                     i += 1
 
@@ -1311,11 +1328,12 @@ def generate_combined_csv_files(header_new, neo4j_general_label, special_label_l
     general_file_end = '.tsv'
 
     tool_path = 'output/neo4j_import/carrier_enzyme_target_transporter.tsv'
-    output_file = open(tool_path, 'w')
+    output_file = open(tool_path, 'w', encoding='utf-8')
     import_string += ' --nodes ' + tool_path
     writer = csv.writer(output_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
-    list_properties = ['go_classifiers', 'pfams', 'gene_sequence', 'amino_acid_sequence', 'synonyms', 'xrefs','alternative_uniprot_id']
+    list_properties = ['go_classifiers', 'pfams', 'gene_sequence', 'amino_acid_sequence', 'synonyms', 'xrefs',
+                       'alternative_uniprot_id']
 
     sub_query = ''
     header_import_tool = []
@@ -1346,12 +1364,12 @@ def generate_combined_csv_files(header_new, neo4j_general_label, special_label_l
             dict_label_to_file[label_string].writerow(property)
         else:
             file_path = general_file_start + label_string + general_file_end
-            output_file_csv = open(file_path, 'w')
+            output_file_csv = open(file_path, 'w', encoding='utf-8')
             writer_output = csv.writer(output_file_csv, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             dict_label_to_file[label_string] = writer_output
             writer_output.writerow(header_new)
             writer_output.writerow(property)
-            query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:/home/cassandra/Dokumente/Project/master_database_change/import_into_Neo4j/drugbank/''' + file_path + '''" As line FIELDTERMINATOR '\\t' Create (b'''
+            query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:''' + path_of_directory + '''master_database_change/import_into_Neo4j/drugbank/''' + file_path + '''" As line FIELDTERMINATOR '\\t' Create (b'''
             for neo4j_label in label_list:
                 query += ''':''' + neo4j_label + ' '
             query += ''':''' + neo4j_general_label + '''{ '''
@@ -1383,6 +1401,26 @@ def generate_combined_csv_files(header_new, neo4j_general_label, special_label_l
     cypher_file.write(':commit\n')
 
 
+# set list of all relationship types betweeen drug and protein
+all_rela_types = set([])
+
+# dictionary from allfields txpes to relat type
+dict_allfield_type_to_rela_type = {}
+
+'''
+load classification of target rela and fill dictionary and set
+'''
+
+
+def load_all_allfields_and_their_rela_types_into_a_dict():
+    file = open('classification_of_target_rela_DrugBank.CSV', 'r')
+    csv_reader = csv.reader(file)
+    next(csv_reader)
+    for line in csv_reader:
+        dict_allfield_type_to_rela_type[line[0]] = line[1]
+        all_rela_types.add(line[1])
+
+
 dict_all_target_drug_pairs = {}
 
 '''
@@ -1397,20 +1435,19 @@ def check_and_maybe_generate_a_new_drug_target_file(file, dict_drug_targets_exte
                                                     neo4j_label_drug, neo4j_label_target, short_form_label, first):
     global import_string
     dict_drug_targe_pairs_xml = {}
-    output_file = open('output/' + file.split('/')[1], 'w')
-    writer_output = csv.writer(output_file, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
-    query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:/home/cassandra/Dokumente/Project/master_database_change/import_into_Neo4j/drugbank/output/''' + \
-            file.split('/')[1] + '''" As line FIELDTERMINATOR '\\t' Match (c:''' + neo4j_label_drug \
-            + '''{ identifier: line.drugbank_id}), (g:''' + neo4j_label_target + '''{ identifier:line.targets_id })  Create (c)-[a:associates_with_Caw''' + short_form_label + '''{ '''
-
+    # file for import tool
     tool_path = 'output/neo4j_import/drug_target.tsv'
-    output_import_tool = open(tool_path, 'a')
+    output_import_tool = open(tool_path, 'a', encoding='utf-8')
     writer_tool = csv.writer(output_import_tool, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-    header_tool = []
-    list_properties = ['actions', 'ref_article', 'ref_links', 'ref_textbooks']
 
-    with open(file) as csvfile:
+    # generate the header and the end part of the different rela queries and also put all relationship in a dictionary
+    header_tool = []
+    list_properties = ['actions', 'ref_article', 'ref_links', 'ref_textbooks', 'ref_attachment']
+
+    query_end = ''
+
+    with open(file + '.tsv') as csvfile:
         reader = csv.DictReader(csvfile, delimiter='\t')
         header = reader.fieldnames
         header_new = []
@@ -1423,10 +1460,10 @@ def check_and_maybe_generate_a_new_drug_target_file(file, dict_drug_targets_exte
             header_new.append(head)
             if head not in ['drugbank_id', 'targets_id']:
                 if head in list_properties:
-                    query += head + ':split(line.' + head + ',"||"), '
+                    query_end += head + ':split(line.' + head + ',"||"), '
                     header_tool.append(head + ':string[]')
                 else:
-                    query += head + ':line.' + head + ', '
+                    query_end += head + ':line.' + head + ', '
                     header_tool.append(head)
             elif head == 'drugbank_id':
                 header_tool.append(':START_ID')
@@ -1438,10 +1475,9 @@ def check_and_maybe_generate_a_new_drug_target_file(file, dict_drug_targets_exte
         if first:
             writer_tool.writerow(header_tool)
             import_string += ' --relationships ' + tool_path
-        query += '''license:"''' + drugbank_license + '''"}]->(g) ;\n'''
-        cypher_rela_file.write(query)
+        query_end += '''license:"''' + drugbank_license + '''"}]->(g) ;\n'''
 
-        writer_output.writerow(header_new)
+        # go through all relationships and add them to a dictionary, also combine multiple relationships
         for row in reader:
             drugbank_id = row['drugbank_id']
             uniprot_id = row['targets_id']
@@ -1509,6 +1545,28 @@ def check_and_maybe_generate_a_new_drug_target_file(file, dict_drug_targets_exte
                 else:
                     sys.exit('the same')
 
+    # dictionary from rela type to file
+    dict_rela_type_to_file = {}
+
+    # generate the different relationship type files with header
+    for rela_type in all_rela_types:
+        # file for cypher-shell
+        output_file = open('output/' + file.split('/')[1] + '_' + rela_type + '.tsv', 'w', encoding='utf-8')
+        writer_output = csv.writer(output_file, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
+        # query for cypher-shell
+        query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:''' + path_of_directory + '''master_database_change/import_into_Neo4j/drugbank/output/''' + \
+                file.split('/')[
+                    1] + '_' + rela_type + '''.tsv" As line FIELDTERMINATOR '\\t' Match (c:''' + neo4j_label_drug \
+                + '''{ identifier: line.drugbank_id}), (g:''' + neo4j_label_target + '''{ identifier:line.targets_id })  Create (c)-[a:''' + rela_type + '_C' + \
+                rela_type[0] + short_form_label + '''{ '''
+
+        query += query_end
+        cypher_rela_file.write(query)
+
+        writer_output.writerow(header_new)
+        dict_rela_type_to_file[rela_type] = writer_output
+
     counter_not = 0
     for (drug, uniprot_id) in dict_drug_targets_sequence.keys():
         if not (drug, uniprot_id) in dict_drug_targe_pairs_xml:
@@ -1544,8 +1602,11 @@ def check_and_maybe_generate_a_new_drug_target_file(file, dict_drug_targets_exte
             # sys.exit('sequence pair not in xml:'+drug+' '+uniprot_id)
     print(counter_not)
 
+    # add the relationships into the different
     counter_total_relationships = 0
     for (drug, target_id), properties in dict_drug_targe_pairs_xml.items():
+        if len(properties) > 1:
+            print('ohje')
         for property in properties:
             output_list = []
             counter_total_relationships += 1
@@ -1564,14 +1625,31 @@ def check_and_maybe_generate_a_new_drug_target_file(file, dict_drug_targets_exte
                     output_tool.append(property[head])
                 output_list.append(property[head])
             output_tool.append(drugbank_license)
-            output_tool.append('associates_with_Caw' + short_form_label)
-            writer_output.writerow(output_list)
+            actions = property['actions'].split('||')
+            if 'targets_id' in property and property['targets_id'] == 'P01375' and property['drugbank_id'] == 'DB13751':
+                print('huhu')
+            if len(actions) == 1:
+                action = dict_allfield_type_to_rela_type[actions[0]]
+                if action in dict_rela_type_to_file:
+                    output_tool.append(action + '_C' + action[0] + short_form_label)
+                    dict_rela_type_to_file[action].writerow(output_list)
+                else:
+                    output_tool.append('associates_Ca' + short_form_label)
+                    dict_rela_type_to_file['associates'].writerow(output_list)
+            else:
+                output_tool.append('associates_Ca' + short_form_label)
+                dict_rela_type_to_file['associates'].writerow(output_list)
             writer_tool.writerow(output_tool)
     print('total number of relationships:' + str(counter_total_relationships))
     output_file.close()
 
 
-def gather_and_combine_carrier_information(uniprot_links, drugbank_all_polypeptide_sequences_fasta,
+'''
+a function that the information for the different protein labels and gather the information and relationships with use of different other functions
+'''
+
+
+def gather_and_combine_protein_information(uniprot_links, drugbank_all_polypeptide_sequences_fasta,
                                            drugbank_all_polypeptide_ids_csv, drugbank_target_tsv,
                                            drugbank_target_output_tsv, drugbank_drug_target_tsv, neo4j_label,
                                            neo4j_label_drug, short_form_label, neo4j_general_label, first):
@@ -1582,7 +1660,7 @@ def gather_and_combine_carrier_information(uniprot_links, drugbank_all_polypepti
     dict_drug_target_external = {}
     dict_target_info_external = {}
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('gather  information from uniprot_links')
 
     # this take all information from drug links.csv
@@ -1596,7 +1674,7 @@ def gather_and_combine_carrier_information(uniprot_links, drugbank_all_polypepti
     dict_drug_target_sequence = {}
     dict_target_info_sequence = {}
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('gather  information from polypeptide sequence')
 
     # this take all information from drug links.csv
@@ -1613,7 +1691,7 @@ def gather_and_combine_carrier_information(uniprot_links, drugbank_all_polypepti
     dict_drug_target_pharmacologically_active_identifier = {}
     dict_target_info_identifier = {}
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('gather  information from polypeptide_ids')
 
     # this take all information from drug links.csv
@@ -1626,7 +1704,7 @@ def gather_and_combine_carrier_information(uniprot_links, drugbank_all_polypepti
         len(dict_drug_target_pharmacologically_active_identifier)))
     print('number of targets:' + str(len(dict_target_info_identifier)))
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('compare and generate new target file')
 
     # check and if necessary generate a combined new file
@@ -1636,7 +1714,7 @@ def gather_and_combine_carrier_information(uniprot_links, drugbank_all_polypepti
                                                             'output/' + drugbank_target_output_tsv, neo4j_label,
                                                             neo4j_general_label)
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('compare and generate new drug-target file')
 
     # check and if necessary generate combined file for rela drug-target
@@ -1658,123 +1736,7 @@ this go through the reaction file and take all metabolite ids
 '''
 
 
-def load_reaction_file_in(neo4j_label_metabolite, neo4j_label_drug):
-    with open('drugbank/drugbank_reactions.tsv') as csvfile:
-        global import_string
-        spamreader = csv.DictReader(csvfile, delimiter='\t')
-        header = spamreader.fieldnames
-
-        file_path_drug_drug = 'output/drugbank_reaction_compound_compound.tsv'
-        file_path_drug_meta = 'output/drugbank_reaction_compound_metabolites.tsv'
-        file_path_meta_drug = 'output/drugbank_reaction_metabolites_compound.tsv'
-        file_path_meta_meta = 'output/drugbank_reaction_metabolites_metabolites.tsv'
-
-        query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:/home/cassandra/Dokumente/Project/master_database_change/import_into_Neo4j/drugbank/''' + file_path_meta_meta + '''" As line FIELDTERMINATOR '\\t' Match (c:''' + neo4j_label_metabolite \
-                + '''{ identifier: line.left_element_drugbank_id}), (g:''' + neo4j_label_metabolite + '''{ identifier:line.right_element_drugbank_id })  Create (c)-[a:reacts_with_MrwM{sequence:line.sequence, enzymes:split(line.enzymes,'||'),license:"''' + drugbank_license + '''"}]->(g) ;\n'''
-        cypher_rela_file.write(query)
-        query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:/home/cassandra/Dokumente/Project/master_database_change/import_into_Neo4j/drugbank/''' + file_path_meta_drug + '''" As line FIELDTERMINATOR '\\t' Match (c:''' + neo4j_label_metabolite \
-                + '''{ identifier: line.left_element_drugbank_id}), (g:''' + neo4j_label_drug + '''{ identifier:line.right_element_drugbank_id })  Create (c)-[a:reacts_with_MrwC{sequence:line.sequence, enzymes:split(line.enzymes,'||'),license:"''' + drugbank_license + '''"}]->(g) ;\n'''
-        cypher_rela_file.write(query)
-        query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:/home/cassandra/Dokumente/Project/master_database_change/import_into_Neo4j/drugbank/''' + file_path_drug_drug + '''" As line FIELDTERMINATOR '\\t' Match (c:''' + neo4j_label_drug \
-                + '''{ identifier: line.left_element_drugbank_id}), (g:''' + neo4j_label_drug + '''{ identifier:line.right_element_drugbank_id })  Create (c)-[a:reacts_with_CrwC{sequence:line.sequence, enzymes:split(line.enzymes,'||'),license:"''' + drugbank_license + '''"}]->(g) ;\n'''
-        cypher_rela_file.write(query)
-        query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:/home/cassandra/Dokumente/Project/master_database_change/import_into_Neo4j/drugbank/''' + file_path_drug_meta + '''" As line FIELDTERMINATOR '\\t' Match (c:''' + neo4j_label_drug \
-                + '''{ identifier: line.left_element_drugbank_id}), (g:''' + neo4j_label_metabolite + '''{ identifier:line.right_element_drugbank_id })  Create (c)-[a:reacts_with_CrwM{sequence:line.sequence, enzymes:split(line.enzymes,'||'),license:"''' + drugbank_license + '''"}]->(g) ;\n'''
-        cypher_rela_file.write(query)
-
-        output_file_drug_drug = open(file_path_drug_drug, 'w')
-        writer_drug_drug = csv.writer(output_file_drug_drug, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        output_file_drug_meta = open(file_path_drug_meta, 'w')
-        writer_drug_meta = csv.writer(output_file_drug_meta, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        output_file_meta_meta = open(file_path_meta_meta, 'w')
-        writer_meta_meta = csv.writer(output_file_meta_meta, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        output_file_meta_drug = open(file_path_meta_drug, 'w')
-        writer_meta_drug = csv.writer(output_file_meta_drug, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-
-        header = list(header)
-        writer_drug_drug.writerow(header)
-        writer_drug_meta.writerow(header)
-        writer_meta_meta.writerow(header)
-        writer_meta_drug.writerow(header)
-
-        header_tool = []
-        for head in header:
-            if head == 'left_element_drugbank_id':
-                header_tool.append(':START_ID')
-            elif head == 'right_element_drugbank_id':
-                header_tool.append(':END_ID')
-            else:
-                header_tool.append(head + ':string[]')
-        header_tool.append('license')
-        header_tool.append(':TYPE')
-
-        tool_path = 'output/neo4j_import/drugbank_reactions.tsv'
-        csv_tool = open(tool_path, 'w')
-        import_string += ' --relationships ' + tool_path
-        writer_tool = csv.writer(csv_tool, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        writer_tool.writerow(header_tool)
-        dict_reactions = {}
-
-        for row in spamreader:
-            left_id = row['left_element_drugbank_id']
-            right_id = row['right_element_drugbank_id']
-            # if left_id[0:5] == 'DBMET':
-            #     if not left_id in dict_with_all_metabolite_from_reactions:
-            #         dict_with_all_metabolite_from_reactions[left_id] = ''
-            # if right_id[0:5] == 'DBMET':
-            #     if not right_id in dict_with_all_metabolite_from_reactions:
-            #         dict_with_all_metabolite_from_reactions[right_id] = ''
-            line_information = []
-            enzymes_list = row['enzymes']
-            if (left_id, right_id) in dict_reactions:
-                dict_reactions[(left_id, right_id)].append({'sequence': row['sequence'], 'enzymes': row['enzymes']})
-            else:
-                dict_reactions[(left_id, right_id)] = [{'sequence': row['sequence'], 'enzymes': row['enzymes']}]
-
-        dict_counter = {'drug_drug': 0,
-                        'drug_meta': 0,
-                        'meta_drug': 0,
-                        'meta_meta': 0}
-        for (left_id, right_id), list_properties in dict_reactions.items():
-            sequence_list = set([])
-            enzymes_list = set([])
-            for dict_property in list_properties:
-                sequence_list.add(dict_property['sequence'])
-                enzymes_list = enzymes_list.union(dict_property['enzymes'].split('||'))
-
-            sequence_list_tool = ';'.join(list(sequence_list))
-            enzymes_list_tool = ';'.join(list(enzymes_list))
-            sequence_list = '||'.join(list(sequence_list))
-            enzymes_list = '||'.join(list(enzymes_list))
-            line_information = [sequence_list, left_id, right_id, enzymes_list]
-            line_information_tool = [sequence_list_tool, left_id, right_id, enzymes_list_tool, drugbank_license]
-
-            if left_id[0:5] != 'DBMET' and right_id[0:5] == 'DBMET':
-                writer_drug_meta.writerow(line_information)
-                line_information_tool.append('reacts_with_CrwM')
-                if left_id in dict_drugbank_drug_ids:
-                    writer_tool.writerow(line_information_tool)
-                dict_counter['drug_meta'] += 1
-            elif left_id[0:5] != 'DBMET' and right_id[0:5] != 'DBMET':
-                writer_drug_drug.writerow(line_information)
-                line_information_tool.append('reacts_with_CrwC')
-                if left_id in dict_drugbank_drug_ids and right_id in dict_drugbank_drug_ids:
-                    writer_tool.writerow(line_information_tool)
-                dict_counter['drug_drug'] += 1
-            elif left_id[0:5] == 'DBMET' and right_id[0:5] == 'DBMET':
-                writer_meta_meta.writerow(line_information)
-                line_information_tool.append('reacts_with_MrwM')
-                writer_tool.writerow(line_information_tool)
-                dict_counter['meta_meta'] += 1
-            else:
-                writer_meta_drug.writerow(line_information)
-                line_information_tool.append('reacts_with_MrwC')
-                if right_id in dict_drugbank_drug_ids:
-                    writer_tool.writerow(line_information_tool)
-                dict_counter['meta_drug'] += 1
-
-        print(dict_counter)
-
+def load_metabolite():
     with open('drugbank/drugbank_metabolites.tsv') as csvfile:
         spamreader = csv.DictReader(csvfile, delimiter='\t')
         for row in spamreader:
@@ -1789,16 +1751,16 @@ this go through the reaction file and take all metabolite ids
 
 
 def gather_all_metabolite_information_and_generate_a_new_file(neo4j_label):
-    output_file_drug = open('output/drugbank_metabolites.tsv', 'w')
+    output_file_drug = open('output/drugbank_metabolites.tsv', 'w', encoding='utf-8')
     writer_drug = csv.writer(output_file_drug, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
-    with open('sdf/metabolite_structure_combined.csv') as csvfile:
+    with open('sdf/metabolite_structure.csv') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=',')
         header = reader.fieldnames
         header_new = header[:]
-        header_new.remove('')
-        header_new.remove('ID')
-        header_new.remove('Molecule')
+        # header_new.remove('')
+        # header_new.remove('ID')
+        # header_new.remove('Molecule')
         header_new.remove('DATABASE_NAME')
         header_new.remove('DATABASE_ID')
         header_new.remove('DRUGBANK_ID')
@@ -1806,7 +1768,7 @@ def gather_all_metabolite_information_and_generate_a_new_file(neo4j_label):
         header_new.insert(0, 'DRUGBANK_ID')
         header_new = [x.lower() for x in header_new]
         writer_drug.writerow(header_new)
-        query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:/home/cassandra/Dokumente/Project/master_database_change/import_into_Neo4j/drugbank/output/drugbank_metabolites.tsv" As line FIELDTERMINATOR '\\t' Create (b:''' + neo4j_label + '''{ '''
+        query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:''' + path_of_directory + '''master_database_change/import_into_Neo4j/drugbank/output/drugbank_metabolites.tsv" As line FIELDTERMINATOR '\\t' Create (b:''' + neo4j_label + '''{ '''
         for head in header_new:
             if head == 'drugbank_id':
                 query += '''identifier:line.''' + head + ', '
@@ -1821,7 +1783,7 @@ def gather_all_metabolite_information_and_generate_a_new_file(neo4j_label):
         header_new = [x.upper() for x in header_new]
         counter_not_in = 0
         dict_sfd_metabolite_ids = {}
-        counter_all_metabolites=0
+        counter_all_metabolites = 0
         for row in reader:
 
             drugbank_metabolite_id = row['DRUGBANK_ID']
@@ -1840,11 +1802,11 @@ def gather_all_metabolite_information_and_generate_a_new_file(neo4j_label):
             entries = []
             for head in header_new:
                 entries.append(row[head])
-            counter_all_metabolites+=1
+            counter_all_metabolites += 1
             writer_drug.writerow(entries)
 
         print(';):)++++++++++++++++++')
-        print('metaboliten with sdf:'+str(counter_all_metabolites))
+        print('metaboliten with sdf:' + str(counter_all_metabolites))
         counter_metabolites_in_xml_and_not_in_sdf = 0
         for db_metabolite_id in dict_with_all_metabolite_from_reactions.keys():
             if not db_metabolite_id in dict_sfd_metabolite_ids:
@@ -1859,10 +1821,10 @@ def gather_all_metabolite_information_and_generate_a_new_file(neo4j_label):
                         entries.append(db_metabolite_id)
                     else:
                         entries.append(dict_with_all_metabolite_from_reactions[db_metabolite_id])
-                counter_all_metabolites+=1
+                counter_all_metabolites += 1
                 writer_drug.writerow(entries)
 
-        print('all metaboliten:'+str(counter_all_metabolites))
+        print('all metaboliten:' + str(counter_all_metabolites))
         print('number of metabolite which are not in the reaction file:' + str(counter_not_in))
         print('number of metabolites which are not in the sdf file:' + str(counter_metabolites_in_xml_and_not_in_sdf))
 
@@ -1880,7 +1842,7 @@ def add_general_to_cypher_node(path, label, special_name):
     with open(path) as csvfile:
         reader = csv.DictReader(csvfile, delimiter='\t')
         header = reader.fieldnames
-        query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:/home/cassandra/Dokumente/Project/master_database_change/import_into_Neo4j/drugbank/''' + path + '''" As line FIELDTERMINATOR '\\t' Create (b:''' + label + '''{ '''
+        query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:''' + path_of_directory + '''master_database_change/import_into_Neo4j/drugbank/''' + path + '''" As line FIELDTERMINATOR '\\t' Create (b:''' + label + '''{ '''
         for head in header:
             if head == special_name:
                 query += 'identifier: line.' + head + ', '
@@ -1904,7 +1866,7 @@ def add_rela_to_cypher(path, label_left, label_right, id_name_left, id_name_righ
         reader = csv.DictReader(csvfile, delimiter='\t')
         header = reader.fieldnames
 
-        query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:/home/cassandra/Dokumente/Project/master_database_change/import_into_Neo4j/drugbank/''' + path + '''" As line FIELDTERMINATOR '\\t' Match (b:''' + label_left + '''{ identifier: line.''' + id_name_left + '''}),'''
+        query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:''' + path_of_directory + '''master_database_change/import_into_Neo4j/drugbank/''' + path + '''" As line FIELDTERMINATOR '\\t' Match (b:''' + label_left + '''{ identifier: line.''' + id_name_left + '''}),'''
         query += '''(c:''' + label_right + '''{ identifier: line.''' + id_name_right + '''}) Create (b)-[:''' + rela_label + '''{'''
         for head in header:
             if head not in [id_name_right, id_name_left]:
@@ -1921,7 +1883,7 @@ prepare the import file for nodes
 
 def import_tool_preparation_node(file_path, id_name, labels):
     global import_string
-    output_file = open('output/neo4j_import/' + file_path.split('/')[1], 'w')
+    output_file = open('output/neo4j_import/' + file_path.split('/')[1], 'w', encoding='utf-8')
     import_string += ' --nodes ' + 'output/neo4j_import/' + file_path.split('/')[1]
     writer = csv.writer(output_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     with open(file_path) as csvfile:
@@ -1959,7 +1921,7 @@ prepare the import file for nodes and generate the a new connect target to mutat
 def import_tool_preparation_new_generated_rela(file_path, labels, label_targer, label_mutated_gene_protein):
     global import_string
     file_name = 'drugbank_target_mutated.tsv'
-    output_file = open('output/neo4j_import/' + file_name, 'w')
+    output_file = open('output/neo4j_import/' + file_name, 'w', encoding='utf-8')
 
     import_string += ' --relationships ' + 'output/neo4j_import/' + file_name
 
@@ -1967,11 +1929,11 @@ def import_tool_preparation_new_generated_rela(file_path, labels, label_targer, 
     header_name_mutated = 'mutated_id'
     writer_tool = csv.writer(output_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
-    output_file_cypher = open('output/' + file_name, 'w')
+    output_file_cypher = open('output/' + file_name, 'w', encoding='utf-8')
     writer = csv.writer(output_file_cypher, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     writer.writerow([header_name_target, header_name_mutated])
 
-    query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:/home/cassandra/Dokumente/Project/master_database_change/import_into_Neo4j/drugbank/output/''' + file_name + '''" As line FIELDTERMINATOR '\\t' Match (b:''' + label_targer + '''{ identifier: line.''' + header_name_target + '''}),'''
+    query = '''Using Periodic Commit 10000 Load CSV  WITH HEADERS From "file:''' + path_of_directory + '''master_database_change/import_into_Neo4j/drugbank/output/''' + file_name + '''" As line FIELDTERMINATOR '\\t' Match (b:''' + label_targer + '''{ identifier: line.''' + header_name_target + '''}),'''
     query += '''(c:''' + label_mutated_gene_protein + '''{ identifier: line.''' + header_name_mutated + '''}) Create (b)-[:''' + labels + ''']->(c);\n'''
     cypher_rela_file.write(query)
 
@@ -1992,8 +1954,9 @@ generate cypher file to integrate all DrugBank entries into Neo4j
 '''
 
 
-def add_the_other_node_to_cypher(pathway_label, product_label, salt_label, mutated_enzyme_gene_label,
-                                 general_target_label, rela_target_muta_label, pharmacologic_class_label):
+def add_the_other_node_to_cypher(pathway_label, product_label, salt_label, mutated_protein_gene_label,
+                                 general_target_label, rela_target_muta_label, pharmacologic_class_label,
+                                 reaction_label):
     path_pathway = 'drugbank/drugbank_pathway.tsv'
     import_tool_preparation_node(path_pathway, 'pathway_id', pathway_label)
     add_general_to_cypher_node(path_pathway, pathway_label, 'pathway_id')
@@ -2006,18 +1969,20 @@ def add_the_other_node_to_cypher(pathway_label, product_label, salt_label, mutat
     import_tool_preparation_node(path_product, 'id', product_label)
     add_general_to_cypher_node(path_product, product_label, 'id')
 
-    path_mutated_gene_enzyme = 'drugbank/drugbank_mutated_gene_enzyme.tsv'
-    import_tool_preparation_node(path_mutated_gene_enzyme, 'connection_id', mutated_enzyme_gene_label)
-    add_general_to_cypher_node(path_mutated_gene_enzyme, mutated_enzyme_gene_label, 'connection_id')
+    path_mutated_gene_protein = 'drugbank/drugbank_mutated_gene_protein.tsv'
+    import_tool_preparation_node(path_mutated_gene_protein, 'connection_id', mutated_protein_gene_label)
+    add_general_to_cypher_node(path_mutated_gene_protein, mutated_protein_gene_label, 'connection_id')
 
     path_pharmacologicClass = 'drugbank/drugbank_pharmacologic_class.tsv'
-    import_tool_preparation_node(path_pharmacologicClass, 'name', pharmacologic_class_label)
-    add_general_to_cypher_node(path_pharmacologicClass, pharmacologic_class_label, 'name')
+    import_tool_preparation_node(path_pharmacologicClass, 'id', pharmacologic_class_label)
+    add_general_to_cypher_node(path_pharmacologicClass, pharmacologic_class_label, 'id')
 
-    import_tool_preparation_new_generated_rela(path_mutated_gene_enzyme, rela_target_muta_label, general_target_label,
-                                               mutated_enzyme_gene_label)
+    path_reaction = 'drugbank/drugbank_reactions.tsv'
+    import_tool_preparation_node(path_reaction, 'id', reaction_label)
+    add_general_to_cypher_node(path_reaction, reaction_label, 'id')
 
-
+    import_tool_preparation_new_generated_rela(path_mutated_gene_protein, rela_target_muta_label, general_target_label,
+                                               mutated_protein_gene_label)
 
 
 '''
@@ -2027,7 +1992,7 @@ generate files for import tool for rela
 
 def generation_of_files_for_import_tool(left_label, right_label, input_path, neo4j_label):
     global import_string
-    output_file = open('output/neo4j_import/' + input_path.split('/')[1], 'w')
+    output_file = open('output/neo4j_import/' + input_path.split('/')[1], 'w', encoding='utf-8')
     import_string += ' --relationships ' + 'output/neo4j_import/' + input_path.split('/')[1]
     writer = csv.writer(output_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     with open(input_path) as csvfile:
@@ -2064,7 +2029,7 @@ generate files for import tool for rela for drug drug interaction
 
 def generation_of_files_for_import_tool_interaction(left_label, right_label, input_path, neo4j_label):
     global import_string
-    output_file = open('output/neo4j_import/' + input_path.split('/')[1], 'w')
+    output_file = open('output/neo4j_import/' + input_path.split('/')[1], 'w', encoding='utf-8')
     import_string += ' --relationships ' + 'output/neo4j_import/' + input_path.split('/')[1]
     writer = csv.writer(output_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     with open(input_path) as csvfile:
@@ -2103,28 +2068,79 @@ dict_not_existing_db = {}
 dict_existing_db = {}
 
 # dictionary that transformed drugbank_property into uniprot property label
-dict_drugbank_to_uniprot_label={
-    'name':'name',
-    'synonyms':'synonyms',
-    'amino_acid_sequence':'as_sequence',
-    'gene_name':'gene_name',
-    'general_function':'general_function',
-    'chromosome_location':'chromosome_location',
-    'pfams':'pfam',
-    'go_classifiers':'go_classifiers',
-    'xrefs':'xref',
-    'cellular_location':'subcellular_location'
+dict_drugbank_to_uniprot_label = {
+    'name': 'name',
+    'synonyms': 'synonyms',
+    'amino_acid_sequence': 'as_sequence',
+    'gene_name': 'gene_name',
+    'general_function': 'general_function',
+    'chromosome_location': 'chromosome_location',
+    'pfams': 'pfam',
+    'go_classifiers': 'go_classifiers',
+    # 'xrefs':'xref',
+    'cellular_location': 'subcellular_location'
 }
+
+'''
+generate  new  enzyme nodes  if they do  not  exist anymore
+'''
+
+
+def add_addtitional_enzymes(uniprot_id, header_new, counter_multiple_information, length_list, spamreader, spamreader_node, position_of_id, enzyme_label, general_label):
+    if not uniprot_id in dict_all_targets:
+        dict_all_targets[uniprot_id] = 1
+        # entries = ['' for i in range(length_list)]
+        entries = []
+        if uniprot_id in dict_uniprot:
+            information_to_this_uniprot_entry = dict_uniprot[uniprot_id]
+            for head in header_new:
+
+                # it seems P00892, P50224, P62158 and P16683 are not really existing anymore in uniprot so the rela and the information should be removed.
+                if len(information_to_this_uniprot_entry) > 1:
+                    print('mmultiprot ' + uniprot_id)
+                    # print(information_to_this_uniprot_entry)
+                    counter_multiple_information += 1
+                    return False,  ""
+                    # sys.exit(uniprot_id)
+                if head in dict_drugbank_to_uniprot_label:
+                    # print(information_to_this_uniprot_entry[0])
+                    entries.append(information_to_this_uniprot_entry[0][dict_drugbank_to_uniprot_label[head]])
+                elif head == 'id_source':
+                    entries.append('Swiss-Prot')
+                elif head == 'alternative_uniprot_id':
+                    alternativ_ids = '||'.join(list(dict_ac_number_to_alternative[uniprot_id]))
+                    entries.append(alternativ_ids)
+                else:
+                    entries.append('')
+        else:
+            entries = ['' for i in range(length_list)]
+            print('not in swiss-prot:' + uniprot_id)
+        dict_all_targets[uniprot_id] = entries
+
+        # to avoid that the uniprot ids with multiple information are removed
+        if len(entries) != 0:
+            entries[position_of_id] = uniprot_id
+            spamreader.writerow(entries)
+            spamreader_node.writerow([uniprot_id, drugbank_license, enzyme_label + ';' + general_label])
+            return True, uniprot_id
+        else:
+            return False, uniprot_id
+
+
+    else:
+        return True, uniprot_id
+
 
 '''
 generate cypher script for the different relationships, where nothing need to check.
 '''
 
 
-def add_the_other_rela_to_cypher(pathway_label, product_label, salt_label, mutated_enzyme_gene_label, drug_label,
-                                 general_label, enzyme_label, header_new, pharmacologic_class_label):
+def add_the_other_rela_to_cypher(pathway_label, product_label, salt_label, mutated_protein_gene_label, drug_label,
+                                 general_label, enzyme_label, header_new, pharmacologic_class_label, reaction_label,
+                                 metabolite_label):
     global import_string
-    # all labe for all rela in neo4j
+    # all label for all rela in neo4j
     label_neo4j_compound_product = 'part_of_CpoP'
     label_neo4j_compound_pathway = 'associates_with_CawPA'
     label_neo4j_compound_salt = 'has_ChS'
@@ -2132,12 +2148,44 @@ def add_the_other_rela_to_cypher(pathway_label, product_label, salt_label, mutat
     label_neo4j_interaction = 'interacts_CiC'
     label_neo4j_enzyme_pathway = 'participates_EpPA'
     label_neo4j_target_peptide = 'has_component_POhcPO'
-    label_neo4j_pharmacologic_class_compound='includes_PCiC'
+    label_neo4j_pharmacologic_class_compound = 'includes_PCiC'
+    label_neo4j_left_rela_Compound = 'left_part_of_reaction_ClporR'
+    label_neo4j_left_rela_metabolite = 'left_part_of_reaction_MlporR'
+    label_neo4j_right_rela_Compound = 'right_part_of_reaction_ClporR'
+    label_neo4j_right_rela_metabolite = 'right_part_of_reaction_MlporR'
+    label_neo4j_proteins_included_reaction = 'take_part_PtpR'
+
+    path_drug_reaction = 'drugbank/drugbank_reaction_to_left_db.tsv'
+    add_rela_to_cypher(path_drug_reaction, drug_label, reaction_label, 'drug_id', 'reaction_id',
+                       label_neo4j_left_rela_Compound)
+    generation_of_files_for_import_tool('drug_id', 'reaction_id', path_drug_reaction, label_neo4j_left_rela_Compound)
+
+    path_meta_reaction = 'drugbank/drugbank__reaction_to_left_dbmet.tsv'
+    add_rela_to_cypher(path_meta_reaction, metabolite_label, reaction_label, 'meta_id', 'reaction_id',
+                       label_neo4j_left_rela_metabolite)
+    generation_of_files_for_import_tool('meta_id', 'reaction_id', path_meta_reaction, label_neo4j_left_rela_metabolite)
+
+    path_drug_reaction = 'drugbank/drugbank_reaction_to_right_db.tsv'
+    add_rela_to_cypher(path_drug_reaction, reaction_label, drug_label, 'reaction_id', 'drug_id',
+                       label_neo4j_right_rela_Compound)
+    generation_of_files_for_import_tool('reaction_id', 'drug_id', path_drug_reaction, label_neo4j_right_rela_Compound)
+
+    path_meta_reaction = 'drugbank/drugbank_reaction_to_right_dbmet.tsv'
+    add_rela_to_cypher(path_meta_reaction, reaction_label, metabolite_label, 'reaction_id', 'meta_id',
+                       label_neo4j_right_rela_metabolite)
+    generation_of_files_for_import_tool('reaction_id', 'meta_id', path_meta_reaction, label_neo4j_right_rela_metabolite)
+
+    path_protein_reaction = 'drugbank/drugbank_reaction_to_protein.tsv'
+    add_rela_to_cypher(path_protein_reaction, enzyme_label, reaction_label, 'protein_id', 'reaction_id',
+                       label_neo4j_proteins_included_reaction)
+    generation_of_files_for_import_tool('protein_id', 'reaction_id', path_protein_reaction,
+                                        label_neo4j_proteins_included_reaction)
 
     path_drug_pharmacologic_class = 'drugbank/drugbank_drug_pharmacologic_class.tsv'
-    add_rela_to_cypher(path_drug_pharmacologic_class,pharmacologic_class_label, drug_label , 'category','drugbank_id',
+    add_rela_to_cypher(path_drug_pharmacologic_class, pharmacologic_class_label, drug_label, 'category', 'drugbank_id',
                        label_neo4j_pharmacologic_class_compound)
-    generation_of_files_for_import_tool('category','drugbank_id', path_drug_pharmacologic_class, label_neo4j_pharmacologic_class_compound)
+    generation_of_files_for_import_tool('category', 'drugbank_id', path_drug_pharmacologic_class,
+                                        label_neo4j_pharmacologic_class_compound)
 
     path_drug_pathway = 'drugbank/drugbank_drug_pathway.tsv'
     add_rela_to_cypher(path_drug_pathway, drug_label, pathway_label, 'drugbank_id', 'pathway_id',
@@ -2154,16 +2202,18 @@ def add_the_other_rela_to_cypher(pathway_label, product_label, salt_label, mutat
                        label_neo4j_compound_product)
     generation_of_files_for_import_tool('drugbank_id', 'partner_id', path_drug_product, label_neo4j_compound_product)
 
-    path_drug_mutated_gen_enzyme = 'drugbank/drugbank_snp_effects.tsv'
-    add_rela_to_cypher(path_drug_mutated_gen_enzyme, drug_label, mutated_enzyme_gene_label, 'drugbank_id', 'partner_id',
+    path_drug_mutated_gene_protein = 'drugbank/drugbank_snp_effects.tsv'
+    add_rela_to_cypher(path_drug_mutated_gene_protein, drug_label, mutated_protein_gene_label, 'drugbank_id',
+                       'partner_id',
                        label_neo4j_compound_mutaded)
-    generation_of_files_for_import_tool('drugbank_id', 'partner_id', path_drug_mutated_gen_enzyme,
+    generation_of_files_for_import_tool('drugbank_id', 'partner_id', path_drug_mutated_gene_protein,
                                         label_neo4j_compound_mutaded)
 
-    path_drug_mutated_gen_enzyme = 'drugbank/drugbank_snp_adverse_drug_reaction.tsv'
-    add_rela_to_cypher(path_drug_mutated_gen_enzyme, drug_label, mutated_enzyme_gene_label, 'drugbank_id', 'partner_id',
+    path_drug_mutated_gene_protein = 'drugbank/drugbank_snp_adverse_drug_reaction.tsv'
+    add_rela_to_cypher(path_drug_mutated_gene_protein, drug_label, mutated_protein_gene_label, 'drugbank_id',
+                       'partner_id',
                        label_neo4j_compound_mutaded)
-    generation_of_files_for_import_tool('drugbank_id', 'partner_id', path_drug_mutated_gen_enzyme,
+    generation_of_files_for_import_tool('drugbank_id', 'partner_id', path_drug_mutated_gene_protein,
                                         label_neo4j_compound_mutaded)
 
     path_drug_drug = 'drugbank/drugbank_interaction.tsv'
@@ -2176,17 +2226,17 @@ def add_the_other_rela_to_cypher(pathway_label, product_label, salt_label, mutat
     add_rela_to_cypher(path_pathway_enzyme, general_label, pathway_label, 'uniprot_id', 'pathway_id',
                        label_neo4j_enzyme_pathway)
 
-    csvfile = open('output/drugbank_Enzyme_DrugBank_2.tsv', 'w')
+    csvfile = open('output/drugbank_Enzyme_DrugBank_2.tsv', 'w', encoding='utf-8')
     spamreader = csv.writer(csvfile, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
     enzymel_path = 'output/neo4j_import/drugbank_enzyme.tsv'
-    file_tool_output = open(enzymel_path, 'w')
+    file_tool_output = open(enzymel_path, 'w', encoding='utf-8')
     import_string += ' --nodes ' + enzymel_path
     spamreader_node = csv.writer(file_tool_output, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     spamreader_node.writerow(['identifier:ID', 'license', ':LABEL'])
 
     tool_path = 'output/neo4j_import/drugbank_enzyme_pathway.tsv'
-    file_tool_output_rela = open(tool_path, 'w')
+    file_tool_output_rela = open(tool_path, 'w', encoding='utf-8')
     import_string += ' --relationships ' + tool_path
     spamreader_rela = csv.writer(file_tool_output_rela, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     spamreader_rela.writerow([':START_ID', ':END_ID', 'license', ':TYPE'])
@@ -2196,7 +2246,7 @@ def add_the_other_rela_to_cypher(pathway_label, product_label, salt_label, mutat
     counter_existing = 0
     position_of_id = header_new.index('id')
     length_list = len(header_new)
-    counter_multiple_information=0
+    counter_multiple_information = 0
     with open(path_pathway_enzyme) as csvfile:
         reader = csv.DictReader(csvfile, delimiter='\t')
 
@@ -2204,56 +2254,26 @@ def add_the_other_rela_to_cypher(pathway_label, product_label, salt_label, mutat
             counter_all += 1
             pathway_id = row['pathway_id']
             uniprot_id = row['uniprot_id']
-
-            # if uniprot_id == ' O49347':
-            #     print('ohm')
-            #     print(uniprot_id)
-            if not uniprot_id in dict_all_targets:
-                dict_all_targets[uniprot_id] = 1
-                # entries = ['' for i in range(length_list)]
-                entries=[]
-                if uniprot_id in dict_uniprot:
-                    information_to_this_uniprot_entry = dict_uniprot[uniprot_id]
-                    for head in header_new:
-
-                        # it seems P00892, P50224, P62158 and P16683 are not really existing anymore in uniprot so the rela and the information should be removed.
-                        if len(information_to_this_uniprot_entry)>1:
-                            print('mmultiprot '+uniprot_id)
-                            # print(information_to_this_uniprot_entry)
-                            counter_multiple_information+=1
-                            break
-                            # sys.exit(uniprot_id)
-                        if head in dict_drugbank_to_uniprot_label:
-                            entries.append(information_to_this_uniprot_entry[0][dict_drugbank_to_uniprot_label[head]])
-                        elif head=='id_source':
-                            entries.append('Swiss-Prot')
-                        elif head=='alternative_uniprot_id':
-                            alternativ_ids='||'.join(list(dict_ac_number_to_alternative[uniprot_id]))
-                            entries.append(alternativ_ids)
-                        else:
-                            entries.append('')
-                else:
-                    entries = ['' for i in range(length_list)]
-                    print('not in swiss-prot:'+uniprot_id)
-                dict_all_targets[uniprot_id]=entries
-
-                # to avoid that the uniprot ids with multiple information are removed
-                if len(entries)!=0:
-                    entries[position_of_id] = uniprot_id
-                    spamreader.writerow(entries)
-                    spamreader_node.writerow([uniprot_id, drugbank_license, enzyme_label + ';' + general_label])
-                    counter_existing += 1
-                    spamreader_rela.writerow([uniprot_id, pathway_id, drugbank_license, label_neo4j_enzyme_pathway])
-                else:
-                    count_not_existin_interaction_pairs += 1
-
-
-            else:
+            print('check pathway  enzymes')
+            print(uniprot_id)
+            found, uniprot_id = add_addtitional_enzymes(uniprot_id, header_new, counter_multiple_information,
+                                                        length_list, spamreader,  spamreader_node, position_of_id,
+                                                        enzyme_label, general_label)
+            if found:
                 spamreader_rela.writerow([uniprot_id, pathway_id, drugbank_license, label_neo4j_enzyme_pathway])
                 counter_existing += 1
+            else:
+                count_not_existin_interaction_pairs += 1
+    with open(path_protein_reaction) as csvfile:
+        reader = csv.DictReader(csvfile, delimiter='\t')
 
+        for row in reader:
+            counter_all += 1
+            uniprot_id = row['protein_id']
+            add_addtitional_enzymes(uniprot_id, header_new, counter_multiple_information, length_list, spamreader,
+                                    spamreader_node, position_of_id, enzyme_label, general_label)
 
-    print('count of the multiple uniprot ids:'+str(counter_multiple_information))
+    print('count of the multiple uniprot ids:' + str(counter_multiple_information))
     csvfile.close()
     print('all interation rela:' + str(counter_all))
     print('number of not integrated interaction:' + str(count_not_existin_interaction_pairs))
@@ -2271,9 +2291,9 @@ organised all steps for metabolites
 '''
 
 
-def get_and_check_on_drugbank_metabolites(neo4j_label_meatbolite, neo4j_label_drug):
+def get_and_check_on_drugbank_metabolites(neo4j_label_meatbolite):
     print('load reaction file')
-    load_reaction_file_in(neo4j_label_meatbolite, neo4j_label_drug)
+    load_metabolite()
 
     gather_all_metabolite_information_and_generate_a_new_file(neo4j_label_meatbolite)
 
@@ -2284,13 +2304,13 @@ generate shell script for neo4j-admin import
 
 
 def generate_shell_script():
-    file = open('script_import_tool.sh', 'w')
+    file = open('script_import_tool.sh', 'w', encoding='utf-8')
     file.write('#!/bin/bash\n\n')
     file.write(import_string)
 
 
 def main():
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('load uniprot')
 
     load_uniprot_info_into_dictionary()
@@ -2298,7 +2318,7 @@ def main():
     print(
         '###########################################################################################################################')
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('drug')
 
     neo4j_label_drug = 'Compound_DrugBank'
@@ -2308,65 +2328,73 @@ def main():
     print(
         '###########################################################################################################################')
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
+    print('load rela types drug protein')
+
+    load_all_allfields_and_their_rela_types_into_a_dict()
+
+    print(
+        '###########################################################################################################################')
+
+    print(datetime.datetime.utcnow())
     print('carrier')
 
     # to open a blank file
-    open('output/neo4j_import/drug_target.tsv', 'w')
+    open('output/neo4j_import/drug_target.tsv', 'w', encoding='utf-8')
 
     neo4j_general_label = 'Protein_DrugBank'
     neo4j_label_carrier = 'Carrier_DrugBank'
-    gather_and_combine_carrier_information('uniprot_links_carrier.csv',
+    gather_and_combine_protein_information('uniprot_links_carrier.csv',
                                            'drugbank_all_carrier_polypeptide_sequences.fasta/',
                                            'drugbank_all_carrier_polypeptide_ids.csv/', 'drugbank_carrier.tsv',
-                                           'drugbank_carrier.tsv', 'drugbank_drug_carrier.tsv', neo4j_label_carrier,
+                                           'drugbank_carrier.tsv', 'drugbank_drug_carrier', neo4j_label_carrier,
                                            neo4j_label_drug, 'CA', neo4j_general_label, True)
 
     print(
         '###########################################################################################################################')
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('enzymes')
 
     neo4j_label_enzyme = 'Enzyme_DrugBank'
-    gather_and_combine_carrier_information('uniprot_links_enzyme.csv',
+    gather_and_combine_protein_information('uniprot_links_enzyme.csv',
                                            'drugbank_all_enzyme_polypeptide_sequences.fasta/',
                                            'drugbank_all_enzyme_polypeptide_ids.csv/', 'drugbank_enzymes.tsv',
-                                           'drugbank_enzymes.tsv', 'drugbank_drug_enzyme.tsv', neo4j_label_enzyme,
+                                           'drugbank_enzymes.tsv', 'drugbank_drug_enzyme', neo4j_label_enzyme,
                                            neo4j_label_drug, 'E', neo4j_general_label, False)
 
     print(
         '###########################################################################################################################')
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('target')
 
     neo4j_label_target = 'Target_DrugBank'
-    gather_and_combine_carrier_information('uniprot_links_target.csv',
+    gather_and_combine_protein_information('uniprot_links_target.csv',
                                            'drugbank_all_target_polypeptide_sequences.fasta/',
                                            'drugbank_all_target_polypeptide_ids.csv/', 'drugbank_targets.tsv',
-                                           'drugbank_targets.tsv', 'drugbank_drug_target.tsv', neo4j_label_target,
+                                           'drugbank_targets.tsv', 'drugbank_drug_target', neo4j_label_target,
                                            neo4j_label_drug, 'T', neo4j_general_label, False)
 
     print(
         '###########################################################################################################################')
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('transporter')
 
     neo4j_label_transporter = 'Transporter_DrugBank'
-    header_new = gather_and_combine_carrier_information('uniprot_links_transporter.csv',
+    header_new = gather_and_combine_protein_information('uniprot_links_transporter.csv',
                                                         'drugbank_all_transporter_polypeptide_sequences.fasta/',
                                                         'drugbank_all_transporter_polypeptide_ids.csv/',
                                                         'drugbank_transporter.tsv',
-                                                        'drugbank_transporter.tsv', 'drugbank_drug_transporter.tsv',
+                                                        'drugbank_transporter.tsv', 'drugbank_drug_transporter',
                                                         neo4j_label_transporter, neo4j_label_drug, 'TR',
                                                         neo4j_general_label, False)
 
     print(
         '###########################################################################################################################')
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('general')
     output = 'output/'
     generate_combined_csv_files(header_new, neo4j_general_label,
@@ -2375,42 +2403,45 @@ def main():
     print(
         '###########################################################################################################################')
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('metabolites')
 
     neo4j_label_metabolite = 'Metabolite_DrugBank'
-    get_and_check_on_drugbank_metabolites(neo4j_label_metabolite, neo4j_label_drug)
+    get_and_check_on_drugbank_metabolites(neo4j_label_metabolite)
 
     print(
         '###########################################################################################################################')
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('other_nodes_without_update')
 
     neo4j_label_pathway = 'Pathway_DrugBank'
     neo4j_label_product = 'Product_DrugBank'
     neo4j_label_salt = 'Salt_DrugBank'
-    neo4j_label_mutated_gene_enzyme = 'Mutated_enzyme_gene_DrugBank'
+    neo4j_label_mutated_gene_protein = 'Mutated_protein_gene_DrugBank'
     neo4j_label_rela_target_mutate = 'has_POhMU'
-    neo4j_label_pharmacologic_class='PharmacologicClass_DrugBank'
+    neo4j_label_pharmacologic_class = 'PharmacologicClass_DrugBank'
+    neo4j_label_reaction = 'Reaction_DrugBank'
 
     add_the_other_node_to_cypher(neo4j_label_pathway, neo4j_label_product, neo4j_label_salt,
-                                 neo4j_label_mutated_gene_enzyme, neo4j_general_label, neo4j_label_rela_target_mutate,neo4j_label_pharmacologic_class)
+                                 neo4j_label_mutated_gene_protein, neo4j_general_label, neo4j_label_rela_target_mutate,
+                                 neo4j_label_pharmacologic_class, neo4j_label_reaction)
 
     print(
         '###########################################################################################################################')
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('other rela without update')
 
     add_the_other_rela_to_cypher(neo4j_label_pathway, neo4j_label_product, neo4j_label_salt,
-                                 neo4j_label_mutated_gene_enzyme, neo4j_label_drug, neo4j_general_label,
-                                 neo4j_label_enzyme, header_new,neo4j_label_pharmacologic_class)
+                                 neo4j_label_mutated_gene_protein, neo4j_label_drug, neo4j_general_label,
+                                 neo4j_label_enzyme, header_new, neo4j_label_pharmacologic_class, neo4j_label_reaction,
+                                 neo4j_label_metabolite)
 
     print(
         '###########################################################################################################################')
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
     print('generate shell script')
 
     generate_shell_script()
@@ -2418,7 +2449,7 @@ def main():
     print(
         '###########################################################################################################################')
 
-    print (datetime.datetime.utcnow())
+    print(datetime.datetime.utcnow())
 
 
 if __name__ == "__main__":
